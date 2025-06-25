@@ -1,14 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi.responses import JSONResponse, HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timedelta
+from .email_service import send_email
 
+
+from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
+from jwt.jwt_handler import create_url_safe_token, decode_url_safe_token, get_password_hash
 from .dependencies import get_current_user, get_db
 from .crud import (
     update_user_profile, delete_user, register_user_with_validation,
     login_user_with_validation, change_user_password_with_validation,
-    initiate_password_reset, complete_password_reset
+    initiate_password_reset, complete_password_reset, get_user_by_email, update_user
 )
-from .email_service import send_password_reset_email, send_welcome_email
 from schemas.user_schemas import (
     UserCreate, UserLogin, UserResponse, UserLoginResponse, 
     PasswordChange, MessageResponse, PasswordReset, PasswordResetConfirm,
@@ -35,7 +39,6 @@ async def register(
             detail=message
         )
     
-    background_tasks.add_task(send_welcome_email, user.email, user.username)
     
     return user
 
@@ -109,33 +112,80 @@ async def change_password(
     
     return MessageResponse(message=message)
 
-@router.post("/forgot-password", response_model=MessageResponse)
-async def forgot_password(
-    password_reset: PasswordReset,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db)
-):
-    success, message, reset_token = await initiate_password_reset(db, password_reset.email)
-    
-    if reset_token:
-        background_tasks.add_task(send_password_reset_email, password_reset.email, reset_token)
-    
-    return MessageResponse(message=message)
-
 @router.post("/reset-password", response_model=MessageResponse)
 async def reset_password(
-    reset_data: PasswordResetConfirm,
-    db: AsyncSession = Depends(get_db)
+    email_data: PasswordReset,
+    background_tasks: BackgroundTasks,
 ):
-    success, message = await complete_password_reset(db, reset_data.token, reset_data.new_password)
-    
-    if not success:
+    email = email_data.email
+
+    token = create_url_safe_token({"email": email})
+
+    link = f"http://localhost:8000/api/v1/users/reset-password-confirm/{token}"
+
+    html = f"""
+    <h1>Reset your Password</h1>
+    <p>Please click this <a href="{link}">link</a> to Reset your Password</p>
+    """
+
+    emails = [email]
+
+    subject = "Verify Your email"
+
+    background_tasks.add_task(send_email, emails, subject, html)
+
+
+    return JSONResponse(
+        content={
+            "message": "Check email to reset your password",
+        },
+        status_code=status.HTTP_200_OK
+    )
+
+@router.post("/reset-password-confirm/{token}")
+async def reset_account_password(
+    token: str,
+    passwords: PasswordResetConfirm,
+    db: AsyncSession = Depends(get_db),
+):
+    new_password = passwords.new_password
+    confirm_password = passwords.confirm_new_password
+
+    if new_password != confirm_password:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message
+            detail="Passwords do not match", status_code=status.HTTP_400_BAD_REQUEST
         )
-    
-    return MessageResponse(message=message)
+
+    try:
+        token_data = decode_url_safe_token(token)
+        user_email = token_data.get("email")
+
+        if user_email:
+            user = await get_user_by_email(db, user_email)
+
+            if not user:
+                raise HTTPException(
+                    detail="User not found", status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            passwd_hash = get_password_hash(new_password)
+            await update_user(db, user, {"password": passwd_hash})
+
+            return JSONResponse(
+                content={"message": "Password reset successfully"},
+                status_code=status.HTTP_200_OK,
+            )
+    except Exception as e:
+        print(f"Error in password reset: {e}")
+        raise HTTPException(
+            detail="Invalid or expired token", 
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    return JSONResponse(
+        content={"message": "Error occurred during password reset."},
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    )
 
 @router.delete("/delete-account", response_model=MessageResponse)
 async def delete_account(

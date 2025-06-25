@@ -13,22 +13,22 @@ url_tag_association = Table(
 class URL(Base):
     __tablename__ = "urls"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, unique=True, primary_key=True, index=True)
     original_url = Column(String, nullable=False, index=True)
     short_code = Column(String, unique=True, nullable=False, index=True)
     click_count = Column(Integer, default=0)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     tags = relationship("Tags", secondary=url_tag_association, back_populates="urls")
     owner = relationship("User", back_populates="urls")
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
 class Tags(Base):
     __tablename__ = "tags"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, unique=True, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

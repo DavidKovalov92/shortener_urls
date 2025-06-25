@@ -45,6 +45,15 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> Opti
         return None
     return user
 
+async def update_user(db: AsyncSession, user: User, user_data: dict) -> Optional[User]:
+    if not user_data:
+        return None
+    for key, value in user_data.items():
+        setattr(user, key, value)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
 
 async def update_user_password(db: AsyncSession, user_id: int, new_password: str) -> bool:
     user = await get_user_by_id(db, user_id)

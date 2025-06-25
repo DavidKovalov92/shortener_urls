@@ -3,37 +3,46 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List
 import os
-from core.config import Settings
-from utils.template_loader import render_template, get_text_version
+from core.config import settings
 
-settings = Settings()
+SMTP_HOST = settings.SMTP_HOST
+SMTP_PORT = settings.SMTP_PORT
+SMTP_USERNAME = settings.SMTP_USERNAME
+SMTP_PASSWORD = settings.SMTP_PASSWORD
+FROM_EMAIL = settings.FROM_EMAIL or settings.SMTP_USERNAME
+API_URL = settings.API_URL
 
-# Email configuration
-SMTP_HOST = getattr(settings, 'SMTP_HOST', 'smtp.gmail.com')
-SMTP_PORT = getattr(settings, 'SMTP_PORT', 587)
-SMTP_USERNAME = getattr(settings, 'SMTP_USERNAME', 'SMTP')
-SMTP_PASSWORD = getattr(settings, 'SMTP_PASSWORD', 'gxhqhhhqhtvsnrht')
-FROM_EMAIL = getattr(settings, 'FROM_EMAIL', SMTP_USERNAME)
-API_URL = getattr(settings, 'API_URL', 'http://localhost:8000')
+# Debug print
+print(f"🔧 Email config loaded:")
+print(f"   SMTP_HOST: {SMTP_HOST}")
+print(f"   SMTP_PORT: {SMTP_PORT}")
+print(f"   SMTP_USERNAME: {SMTP_USERNAME}")
+print(f"   SMTP_PASSWORD: {'*' * len(SMTP_PASSWORD) if SMTP_PASSWORD else 'NOT SET'}")
+print(f"   FROM_EMAIL: {FROM_EMAIL}")
 
-async def send_email(
-    to_emails: List[str],
-    subject: str,
-    html_content: str,
-    text_content: str = None
-) -> bool:
+def create_message(recipients: List[str], subject: str, body: str) -> MIMEMultipart:
+    message = MIMEMultipart("alternative")
+    message["Subject"] = subject
+    message["From"] = FROM_EMAIL
+    message["To"] = ", ".join(recipients)
+    
+    html_part = MIMEText(body, "html", "utf-8")
+    message.attach(html_part)
+    
+    return message
+
+async def send_email(recipients: List[str], subject: str, body: str) -> bool:
     try:
-        message = MIMEMultipart("alternative")
-        message["Subject"] = subject
-        message["From"] = FROM_EMAIL
-        message["To"] = ", ".join(to_emails)
+        print(f"Attempting to send email to: {recipients}")
+        print(f"SMTP: {SMTP_HOST}:{SMTP_PORT}")
+        print(f"Username: {SMTP_USERNAME}")
+        print(f"From: {FROM_EMAIL}")
         
-        if text_content:
-            text_part = MIMEText(text_content, "plain", "utf-8")
-            message.attach(text_part)
+        if not SMTP_USERNAME or not SMTP_PASSWORD:
+            print("ERROR: SMTP credentials not configured!")
+            return False
         
-        html_part = MIMEText(html_content, "html", "utf-8")
-        message.attach(html_part)
+        message = create_message(recipients=recipients, subject=subject, body=body)
         
         await aiosmtplib.send(
             message,
@@ -43,44 +52,10 @@ async def send_email(
             username=SMTP_USERNAME,
             password=SMTP_PASSWORD,
         )
+        print("✅ Email sent successfully!")
         return True
     except Exception as e:
-        print(f"Error sending email: {e}")
+        print(f"❌ Error sending email: {e}")
         return False
 
 
-async def send_password_reset_email(email: str, reset_token: str) -> bool:
-    reset_url = f"{API_URL}/docs#/Users/reset_password_users_reset_password_post"
-    
-    subject = "Скидання пароля - URL Shortener"
-    
-    context = {
-        "reset_url": reset_url,
-        "reset_token": reset_token
-    }
-    
-    try:
-        html_content = render_template("password_reset.html", context)
-        text_content = get_text_version(html_content)
-        
-        return await send_email([email], subject, html_content, text_content)
-    except Exception as e:
-        raise Exception(f"Error sending password reset email: {e}")
-        
-
-
-async def send_welcome_email(email: str, username: str) -> bool:
-    subject = "Ласкаво просимо до URL Shortener!"
-    
-    context = {
-        "username": username,
-        "app_url": f"{API_URL}/docs"
-    }
-    
-    try:
-        html_content = render_template("welcome.html", context)
-        text_content = get_text_version(html_content)
-        
-        return await send_email([email], subject, html_content, text_content)
-    except Exception as e:
-        raise Exception(f"Error sending password reset email: {e}")

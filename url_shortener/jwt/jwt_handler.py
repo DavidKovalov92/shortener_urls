@@ -3,6 +3,7 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from core.config import Settings
+from itsdangerous import URLSafeTimedSerializer
 
 settings = Settings()
 
@@ -53,3 +54,21 @@ def verify_reset_token(token: str) -> Optional[str]:
         return payload.get("email")
     except JWTError:
         return None 
+
+
+serializer = URLSafeTimedSerializer(secret_key=SECRET_KEY, salt="email-configuration")
+
+def create_url_safe_token(data: dict):
+
+    token = serializer.dumps(data)
+
+    return token
+
+def decode_url_safe_token(token: str):
+    try:
+        token_data = serializer.loads(token)
+
+        return token_data
+    
+    except Exception as e:
+        raise e

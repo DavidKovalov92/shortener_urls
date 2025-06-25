@@ -20,16 +20,16 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from url_shortener.models.base import Base
-from url_shortener.models.user_model import User
-from url_shortener.models.url_model import URL, Tags
+from models.base import Base
+from models.user_model import User
+from models.url_model import URL, Tags
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-from url_shortener.core.config import Settings
+from core.config import Settings
 settings = Settings()
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 

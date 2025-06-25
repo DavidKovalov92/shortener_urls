@@ -222,7 +222,6 @@ async def delete_short_url(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Видаляє URL"""
     success = await delete_url(db, url_id, current_user.id)
     if not success:
         raise HTTPException(
@@ -237,7 +236,6 @@ async def get_my_tags(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Отримує всі теги користувача"""
     tags = await get_user_tags(db, current_user.id)
     return [TagResponse(
         id=tag.id,
@@ -251,7 +249,6 @@ async def delete_user_tag(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Видаляє тег користувача"""
     success = await delete_tag(db, tag_id, current_user.id)
     if not success:
         raise HTTPException(
